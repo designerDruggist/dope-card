@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DOPE Card Controller</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; background: #121212; color: #fff; padding: 15px; margin: 0; }
+    button { width: 100%; padding: 12px; margin: 6px 0; border: none; border-radius: 6px; font-size: 16px; font-weight: bold; cursor: pointer; }
+    .btn-connect { background: #007acc; color: white; }
+    .btn-zero { background: #d9534f; color: white; }
+    .btn-send { background: #28a745; color: white; }
+    .card { background: #1e1e1e; border: 1px solid #333; padding: 12px; border-radius: 8px; margin-bottom: 12px; }
+    input, select { width: 100%; padding: 10px; margin: 4px 0 10px; background: #2a2a2a; border: 1px solid #444; color: #fff; border-radius: 4px; box-sizing: border-box; font-size: 15px; }
+    .status { font-weight: bold; text-align: center; margin: 10px 0; color: #888; }
+    .connected { color: #00e676; }
+  </style>
+</head>
+<body>
+
+  <h2>DOPE Card BLE Sync</h2>
+  <button id="connectBtn" class="btn-connect" onclick="connectBle()">Pair & Connect DOPE Card</button>
+  <div id="status" class="status">Disconnected</div>
+
+  <div class="card">
+    <label>Active Stage:</label>
+    <select id="stageSelect" onchange="switchStage()">
+      <option value="1">Stage 1</option>
+      <option value="2">Stage 2</option>
+      <option value="3">Stage 3</option>
+      <option value="4">Stage 4</option>
+    </select>
+  </div>
+
+  <div class="card">
+    <label>Target String (Dist,Elev,Wind):</label>
+    <input type="text" id="dopePayload" placeholder="385,1.9,0.4;540,3.4,0.7;620,4.3,0.9;715,5.5,1.0">
+    <button class="btn-send" onclick="sendDope()">Push Targets to Screen</button>
+  </div>
+
+  <div class="card">
+    <label>Cant Sensor Calibration:</label>
+    <button class="btn-zero" onclick="sendZero()">Tare / Zero Level (Plumb)</button>
+  </div>
+
+  <script>
+    const SERVICE_UUID = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
+    const RX_CHAR_UUID = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
+
+    let rxCharacteristic = null;
+
+    async function connectBle() {
+      try {
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'DOPE-CARD-BLE' }],
+          optionalServices: [SERVICE_UUID]
+        });
+
+        document.getElementById('status').innerText = "Connecting...";
+        const server = await device.gatt.connect();
+        const service = await server.getPrimaryService(SERVICE_UUID);
+        rxCharacteristic = await service.getCharacteristic(RX_CHAR_UUID);
+
+        document.getElementById('status').innerText = "Connected to DOPE-CARD-BLE";
+        document.getElementById('status').classList.add('connected');
+        document.getElementById('connectBtn').innerText = "Connected";
+      } catch (err) {
+        console.error(err);
+        document.getElementById('status').innerText = "Connection failed: " + err;
+      }
+    }
+
+    async function sendCommand(cmdStr) {
+      if (!rxCharacteristic) {
+        alert("Connect to the DOPE card first!");
+        return;
+      }
+      const encoder = new TextEncoder();
+      await rxCharacteristic.writeValue(encoder.encode(cmdStr));
+    }
+
+    function sendDope() {
+      const stage = document.getElementById('stageSelect').value;
+      const data = document.getElementById('dopePayload').value.trim();
+      if (!data) return;
+      sendCommand(`S${stage}:${data}`);
+    }
+
+    function switchStage() {
+      const stage = document.getElementById('stageSelect').value;
+      sendCommand(`STAGE:${stage}`);
+    }
+
+    function sendZero() {
+      sendCommand("ZERO");
+    }
+  </script>
+</body>
+</html>
